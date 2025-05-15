@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Simple 2D Multiplayer Shooter</title>
+  <style>
+    canvas { background: #111; display: block; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const socket = new WebSocket('ws://localhost:8080'); // For local testing
+
+    let playerId = null;
+    const players = {};
+    const keys = {};
+    const bullets = [];
+
+    document.addEventListener('keydown', e => keys[e.key] = true);
+    document.addEventListener('keyup', e => keys[e.key] = false);
+
+    function shoot(x, y) {
+      const bullet = { x, y, vx: 5, owner: playerId };
+      bullets.push(bullet);
+      socket.send(JSON.stringify({ type: 'shoot', x, y, vx: bullet.vx }));
+    }
+
+    socket.onmessage = event => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'init') {
+        playerId = msg.id;
+        players[playerId] = { x: 400, y: 300 };
+      } else if (msg.type === 'update') {
+        players[msg.id] = { x: msg.x, y: msg.y };
+      } else if (msg.type === 'remove') {
+        delete players[msg.id];
+      } else if (msg.type === 'shoot') {
+        bullets.push({ x: msg.x, y: msg.y, vx: msg.vx, owner: msg.id });
+      }
+    };
+
+    function update() {
+      const player = players[playerId];
+      if (!player) return;
+
+      const speed = 4;
+      if (keys['ArrowUp']) player.y -= speed;
+      if (keys['ArrowDown']) player.y += speed;
+      if (keys['ArrowLeft']) player.x -= speed;
+      if (keys['ArrowRight']) player.x += speed;
+
+      if (keys[' ']) shoot(player.x, player.y);
+
+      socket.send(JSON.stringify({ type: 'update', x: player.x, y: player.y }));
+
+      bullets.forEach(b => b.x += b.vx);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const id in players) {
+        const p = players[id];
+        ctx.fillStyle = id === playerId ? 'lime' : 'red';
+        ctx.fillRect(p.x - 10, p.y - 10, 20, 20);
+      }
+
+      ctx.fillStyle = 'yellow';
+      bullets.forEach(b => ctx.fillRect(b.x - 2, b.y - 2, 4, 4));
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    loop();
+  </script>
+</body>
+</html>
