@@ -12,21 +12,20 @@ wss.on('connection', (ws) => {
   ws.on('message', (message) => {
     const data = JSON.parse(message);
     data.id = id;
-    broadcast(JSON.stringify(data), id);
+
+    for (const [otherId, client] of players) {
+      if (client !== ws && client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(data));
+      }
+    }
   });
 
   ws.on('close', () => {
     players.delete(id);
-    broadcast(JSON.stringify({ type: 'remove', id }), id);
+    for (const client of players.values()) {
+      client.send(JSON.stringify({ type: 'remove', id }));
+    }
   });
 });
 
-function broadcast(message, exceptId) {
-  for (const [id, ws] of players) {
-    if (id !== exceptId && ws.readyState === WebSocket.OPEN) {
-      ws.send(message);
-    }
-  }
-}
-
-console.log('Server running at ws://localhost:8080');
+console.log('✅ Server running at ws://localhost:8080');
